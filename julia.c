@@ -19,6 +19,8 @@ void render_julia(SDL_Renderer *renderer, window *ww, double cx, double cy, Uint
     if(!datas)
         return;
 
+    Uint64 start = SDL_GetTicks64();
+
     for(int i = 0; i < nthreads; i++) {
         datas[i] = create_data_julia(ww, pixels, grad, cx, cy, i, nthreads, maxiter, cmax);
         threads[i] = SDL_CreateThread(thread_julia, (char*) &i, (void*) datas[i]);
@@ -28,6 +30,10 @@ void render_julia(SDL_Renderer *renderer, window *ww, double cx, double cy, Uint
         SDL_WaitThread(threads[i], NULL); 
         free(datas[i]);  
     }
+
+    Uint64 end = SDL_GetTicks64();
+
+    printf("%lld\n", end - start);
 
     free(threads);
     free(datas);
@@ -102,11 +108,10 @@ int thread_julia(void *data) {
     int idx = 0;
     while((mask > 0) && (idx < maxiter)) {
       _x2 = _mm256_mul_pd(_x, _x);
-      _y2 = _mm256_mul_pd(_y, _y);
+      _y2 = _mm256_fmsub_pd(_y, _y, _cx);
       _y = _mm256_mul_pd(_two, _y);
       _y = _mm256_fmadd_pd(_x, _y, _cy);
       _x = _mm256_sub_pd(_x2, _y2);
-      _x = _mm256_add_pd(_x, _cx);
 
       _z2 = _mm256_add_pd(_x2, _y2);
       double *z2 = (double*) &_z2;
