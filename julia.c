@@ -1,6 +1,7 @@
 #include "headers.h"
 #include "SDL_thread.h"
 #include <stdlib.h>
+#include <immintrin.h>
 #include <math.h>
 
 void render_julia(SDL_Renderer *renderer, window *ww, double cx, double cy, Uint32 *grad, int maxiter, int cmax) {
