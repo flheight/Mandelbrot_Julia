@@ -4,42 +4,19 @@
 #include <immintrin.h>
 #include <math.h>
 
-void render_julia(SDL_Renderer *renderer, window *ww, double cx, double cy, Uint32 *grad, int maxiter, int cmax) {
-  SDL_Texture *texture;
-  void *pixels;
-  int pitch;
-  texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, ww->w, ww->h);
-  SDL_LockTexture(texture, NULL, &pixels, &pitch);
+typedef struct {
+  window *ww;
+  Uint32 *pixels;
+  Uint32 *grad;
+  double cx;
+  double cy;
+  int start;
+  int step;
+  int maxiter;
+  int cmax;
+} data_julia;
 
-  SDL_Thread **threads;
-  threads = malloc(nthreads * sizeof(SDL_Thread*));
-  if(!threads)
-    return;
-  data_julia **datas;
-  datas = malloc(nthreads * sizeof(data_julia*));
-  if(!datas)
-    return;
-
-  for(int i = 0; i < nthreads; i++) {
-    datas[i] = create_data_julia(ww, pixels, grad, cx, cy, i, nthreads, maxiter, cmax);
-    threads[i] = SDL_CreateThread(thread_julia, (char*) &i, (void*) datas[i]);
-  }
-
-  for(int i = 0; i < nthreads; i++) {
-    SDL_WaitThread(threads[i], NULL); 
-    free(datas[i]);  
-  }
-
-  free(threads);
-  free(datas);
-
-  SDL_UnlockTexture(texture);
-  SDL_RenderCopy(renderer, texture, NULL, NULL);
-  SDL_DestroyTexture(texture);
-  SDL_RenderPresent(renderer);
-}
-
-data_julia *create_data_julia(window *ww, Uint32 *pixels, Uint32 *grad, double cx, double cy, int start, int step, int maxiter, int cmax) {
+static data_julia *create_data_julia(window *ww, Uint32 *pixels, Uint32 *grad, double cx, double cy, int start, int step, int maxiter, int cmax) {
   data_julia *data = (data_julia*) malloc(sizeof(data_julia));
   if(!data)
     return NULL;
@@ -47,7 +24,7 @@ data_julia *create_data_julia(window *ww, Uint32 *pixels, Uint32 *grad, double c
   return data;
 }
 
-void load_data_julia(void *data, window **ww, Uint32 **pixels, Uint32 **grad, double *cx, double *cy, int *start, int *step, int *maxiter, int *cmax) {
+static void load_data_julia(void *data, window **ww, Uint32 **pixels, Uint32 **grad, double *cx, double *cy, int *start, int *step, int *maxiter, int *cmax) {
   *ww = ((data_julia*) data)->ww;
   *pixels = ((data_julia*) data)->pixels;
   *grad = ((data_julia*) data)->grad;
@@ -58,6 +35,7 @@ void load_data_julia(void *data, window **ww, Uint32 **pixels, Uint32 **grad, do
   *maxiter = ((data_julia*) data)->maxiter;
   *cmax = ((data_julia*) data)->cmax;
 }
+
 
 int thread_julia(void *data) {
   window *ww = NULL;
@@ -136,4 +114,36 @@ int thread_julia(void *data) {
   free(y);
 
   return 0;
+}
+
+void render_julia(window *ww, double cx, double cy, Uint32 *grad, int maxiter, int cmax) {
+  Uint32 *pixels;
+  int pitch;
+  SDL_LockTexture(ww->tex, NULL, (void**) &pixels, &pitch);
+
+  SDL_Thread **threads;
+  threads = malloc(nthreads * sizeof(SDL_Thread*));
+  if(!threads)
+    return;
+  data_julia **datas;
+  datas = malloc(nthreads * sizeof(data_julia*));
+  if(!datas)
+    return;
+
+  for(int i = 0; i < nthreads; i++) {
+    datas[i] = create_data_julia(ww, pixels, grad, cx, cy, i, nthreads, maxiter, cmax);
+    threads[i] = SDL_CreateThread(thread_julia, (char*) &i, (void*) datas[i]);
+  }
+
+  for(int i = 0; i < nthreads; i++) {
+    SDL_WaitThread(threads[i], NULL); 
+    free(datas[i]);  
+  }
+
+  free(threads);
+  free(datas);
+
+  SDL_UnlockTexture(ww->tex);
+  SDL_RenderCopy(ww->ren, ww->tex, NULL, NULL);
+  SDL_RenderPresent(ww->ren);
 }

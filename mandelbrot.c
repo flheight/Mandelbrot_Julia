@@ -4,42 +4,17 @@
 #include <immintrin.h>
 #include <math.h>
 
-void render_mandelbrot(SDL_Renderer *renderer, window *ww, Uint32 *grad, int maxiter, int cmax) {
-  SDL_Texture *texture;
-  void *pixels;
-  int pitch;
-  texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, ww->w, ww->h);
-  SDL_LockTexture(texture, NULL, &pixels, &pitch);
-  
-  SDL_Thread **threads;
-  threads = malloc(nthreads * sizeof(SDL_Thread*));
-  if(!threads)
-    return;
-  data_mandelbrot **datas;
-  datas = malloc(nthreads * sizeof(data_mandelbrot*));
-  if(!datas)
-    return;
+typedef struct {
+  window *ww;
+  Uint32 *pixels;
+  Uint32 *grad;
+  int start;
+  int step;
+  int maxiter;
+  int cmax;
+} data_mandelbrot;
 
-  for(int i = 0; i < nthreads; i++) {
-    datas[i] = create_data_mandelbrot(ww, pixels, grad, i, nthreads, maxiter, cmax);
-    threads[i] = SDL_CreateThread(thread_mandelbrot, (char*) &i, (void*) datas[i]);
-  }
-
-  for(int i = 0; i < nthreads; i++) {
-    SDL_WaitThread(threads[i], NULL);  
-    free(datas[i]);
-  }
-
-  free(threads);
-  free(datas);
-
-  SDL_UnlockTexture(texture);
-  SDL_RenderCopy(renderer, texture, NULL, NULL);
-  SDL_DestroyTexture(texture);
-  SDL_RenderPresent(renderer);
-}
-
-data_mandelbrot *create_data_mandelbrot(window *ww, Uint32 *pixels, Uint32 *grad, int start, int step, int maxiter, int cmax) {
+static data_mandelbrot *create_data_mandelbrot(window *ww, Uint32 *pixels, Uint32 *grad, int start, int step, int maxiter, int cmax) {
   data_mandelbrot *data = (data_mandelbrot*) malloc(sizeof(data_mandelbrot));
   if(!data)
     return NULL;
@@ -47,7 +22,7 @@ data_mandelbrot *create_data_mandelbrot(window *ww, Uint32 *pixels, Uint32 *grad
   return data;
 }
 
-void load_data_mandelbrot(void *data, window **ww, Uint32 **pixels, Uint32 **grad, int *start, int *step, int *maxiter, int *cmax) {
+static void load_data_mandelbrot(void *data, window **ww, Uint32 **pixels, Uint32 **grad, int *start, int *step, int *maxiter, int *cmax) {
   *ww = ((data_mandelbrot*) data)->ww;
   *pixels = ((data_mandelbrot*) data)->pixels;
   *grad = ((data_mandelbrot*) data)->grad;
@@ -57,7 +32,7 @@ void load_data_mandelbrot(void *data, window **ww, Uint32 **pixels, Uint32 **gra
   *cmax = ((data_mandelbrot*) data)->cmax;
 }
 
-int thread_mandelbrot(void *data) {
+static int thread_mandelbrot(void *data) {
   window *ww = NULL;
   Uint32 *pixels = NULL;
   Uint32 *grad = NULL;
@@ -133,3 +108,36 @@ int thread_mandelbrot(void *data) {
 
   return 0;
 }
+
+void render_mandelbrot(window *ww, Uint32 *grad, int maxiter, int cmax) {
+  Uint32 *pixels;
+  int pitch;
+  SDL_LockTexture(ww->tex, NULL, (void**) &pixels, &pitch);
+  
+  SDL_Thread **threads;
+  threads = malloc(nthreads * sizeof(SDL_Thread*));
+  if(!threads)
+    return;
+  data_mandelbrot **datas;
+  datas = malloc(nthreads * sizeof(data_mandelbrot*));
+  if(!datas)
+    return;
+
+  for(int i = 0; i < nthreads; i++) {
+    datas[i] = create_data_mandelbrot(ww, pixels, grad, i, nthreads, maxiter, cmax);
+    threads[i] = SDL_CreateThread(thread_mandelbrot, (char*) &i, (void*) datas[i]);
+  }
+
+  for(int i = 0; i < nthreads; i++) {
+    SDL_WaitThread(threads[i], NULL);  
+    free(datas[i]);
+  }
+
+  free(threads);
+  free(datas);
+
+  SDL_UnlockTexture(ww->tex);
+  SDL_RenderCopy(ww->ren, ww->tex, NULL, NULL);
+  SDL_RenderPresent(ww->ren);
+}
+
