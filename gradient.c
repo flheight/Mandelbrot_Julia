@@ -2,6 +2,7 @@
 
 Uint32 *gradient(int cmax) {
     Uint32 *grad = (Uint32*) malloc(cmax * sizeof(Uint32));
+
     if(!grad)
         return NULL;
 

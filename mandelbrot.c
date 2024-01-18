@@ -5,7 +5,7 @@
 #include <math.h>
 
 typedef struct {
-  window *ww;
+  window *win;
   Uint32 *pixels;
   Uint32 *grad;
   int start;
@@ -14,16 +14,16 @@ typedef struct {
   int cmax;
 } data_mandelbrot;
 
-static data_mandelbrot *create_data_mandelbrot(window *ww, Uint32 *pixels, Uint32 *grad, int start, int step, int maxiter, int cmax) {
+static data_mandelbrot *__create_data_mandelbrot(window *win, Uint32 *pixels, Uint32 *grad, int start, int step, int maxiter, int cmax) {
   data_mandelbrot *data = (data_mandelbrot*) malloc(sizeof(data_mandelbrot));
   if(!data)
     return NULL;
-  *data = (data_mandelbrot) {ww, pixels, grad, start, step, maxiter, cmax};
+  *data = (data_mandelbrot) {win, pixels, grad, start, step, maxiter, cmax};
   return data;
 }
 
-static void load_data_mandelbrot(void *data, window **ww, Uint32 **pixels, Uint32 **grad, int *start, int *step, int *maxiter, int *cmax) {
-  *ww = ((data_mandelbrot*) data)->ww;
+static void __load_data_mandelbrot(void *data, window **win, Uint32 **pixels, Uint32 **grad, int *start, int *step, int *maxiter, int *cmax) {
+  *win = ((data_mandelbrot*) data)->win;
   *pixels = ((data_mandelbrot*) data)->pixels;
   *grad = ((data_mandelbrot*) data)->grad;
   *start = ((data_mandelbrot*) data)->start;
@@ -33,7 +33,7 @@ static void load_data_mandelbrot(void *data, window **ww, Uint32 **pixels, Uint3
 }
 
 static int thread_mandelbrot(void *data) {
-  window *ww = NULL;
+  window *win = NULL;
   Uint32 *pixels = NULL;
   Uint32 *grad = NULL;
   int start;
@@ -41,26 +41,30 @@ static int thread_mandelbrot(void *data) {
   int maxiter;
   int cmax;
 
-  load_data_mandelbrot(data, &ww, &pixels, &grad, &start, &step, &maxiter, &cmax);
+  __load_data_mandelbrot(data, &win, &pixels, &grad, &start, &step, &maxiter, &cmax);
 
   double *cx = (double*) malloc(4 * sizeof(double));
   double *cy = (double*) malloc(4 * sizeof(double));
   if(!cx || !cy)
     return 0;
 
-  char mask;
-  double dx = (ww->xmax - ww->xmin) / (ww->w - 1);
-  double dy = (ww->ymax - ww->ymin) / (ww->h - 1);
+  union {
+    unsigned int full;
+    unsigned char bytes[4];
+  } mask;
+
+  double dx = (win->xmax - win->xmin) / (win->w - 1);
+  double dy = (win->ymax - win->ymin) / (win->h - 1);
 
   __m256d _two = _mm256_set1_pd(2.0);
 
   Uint32 *iter = pixels + 4 * start;
-  for(int i = 4 * start; i < ww->w * ww->h; i += 4 * step, iter += 4 * step) {
-    mask = 0xf;
+  for(int i = 4 * start; i < win->w * win->h; i += 4 * step, iter += 4 * step) {
+    mask.full = 0xffffffff;
 
     for(int j = 0; j < 4; j++) {
-      cx[j] = ww->xmin + ((i + j) % ww->w) * dx;
-      cy[j] = ww->ymax - ((i + j) / ww->w) * dy;
+      cx[j] = win->xmin + ((i + j) % win->w) * dx;
+      cy[j] = win->ymax - ((i + j) / win->w) * dy;
     }
 
     __m256d _cx = _mm256_loadu_pd(cx);
@@ -72,7 +76,7 @@ static int thread_mandelbrot(void *data) {
     __m256d _z2;
 
     int idx = 0;
-    while((mask > 0) && (idx < maxiter)) {
+    while((mask.full > 0) && (idx < maxiter)) {
       _x2 = _mm256_mul_pd(_x, _x);
       _y2 = _mm256_fmsub_pd(_y, _y, _cx);
       _y = _mm256_mul_pd(_two, _y);
@@ -82,11 +86,11 @@ static int thread_mandelbrot(void *data) {
       _z2 = _mm256_add_pd(_x2, _y2);
       double *z2 = (double*) &_z2;
 
-      for(int j = 0; (j < 4) && (i + j < ww->w * ww->h); j++) {
-        if(!((mask >> j) & 1))
+      for(int j = 0; (j < 4) && (i + j < win->w * win->h); j++) {
+        if(!mask.bytes[j])
           continue;
         if(z2[j] >= bailout) {
-          mask ^= (1 << j);
+          mask.bytes[j] = 0;
           double nu = idx + 1 - log2(log(z2[j]));
           nu = nu < 0 ? 0 : nu;
           *(iter + j) = grad[(int) (cmax * (nu / maxiter))];
@@ -96,8 +100,8 @@ static int thread_mandelbrot(void *data) {
       idx++;
     }
 
-    for(int j = 0; (j < 4) && (i + j < ww->w * ww->h); j++) {
-      if(!((mask >> j) & 1))
+    for(int j = 0; (j < 4) && (i + j < win->w * win->h); j++) {
+      if(!mask.bytes[j])
         continue;
       *(iter + j) = grad[cmax - 1];
     }
@@ -109,10 +113,10 @@ static int thread_mandelbrot(void *data) {
   return 0;
 }
 
-void render_mandelbrot(window *ww, Uint32 *grad, int maxiter, int cmax) {
+void render_mandelbrot(window *win, Uint32 *grad, int maxiter, int cmax) {
   Uint32 *pixels;
   int pitch;
-  SDL_LockTexture(ww->tex, NULL, (void**) &pixels, &pitch);
+  SDL_LockTexture(win->tex, NULL, (void**) &pixels, &pitch);
   
   SDL_Thread **threads;
   threads = malloc(nthreads * sizeof(SDL_Thread*));
@@ -124,7 +128,7 @@ void render_mandelbrot(window *ww, Uint32 *grad, int maxiter, int cmax) {
     return;
 
   for(int i = 0; i < nthreads; i++) {
-    datas[i] = create_data_mandelbrot(ww, pixels, grad, i, nthreads, maxiter, cmax);
+    datas[i] = __create_data_mandelbrot(win, pixels, grad, i, nthreads, maxiter, cmax);
     threads[i] = SDL_CreateThread(thread_mandelbrot, (char*) &i, (void*) datas[i]);
   }
 
@@ -136,8 +140,8 @@ void render_mandelbrot(window *ww, Uint32 *grad, int maxiter, int cmax) {
   free(threads);
   free(datas);
 
-  SDL_UnlockTexture(ww->tex);
-  SDL_RenderCopy(ww->ren, ww->tex, NULL, NULL);
-  SDL_RenderPresent(ww->ren);
+  SDL_UnlockTexture(win->tex);
+  SDL_RenderCopy(win->ren, win->tex, NULL, NULL);
+  SDL_RenderPresent(win->ren);
 }
 

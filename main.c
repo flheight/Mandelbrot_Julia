@@ -1,8 +1,5 @@
 #include "headers.h"
 
-SDL_Window *win1;
-SDL_Window *win2;
-
 int main(int argc, char *argv[]) {
     int x;
     int y;
@@ -10,10 +7,8 @@ int main(int argc, char *argv[]) {
     int h;
     int ret = 1;
 
-    if(SDL_Init(SDL_INIT_VIDEO) < 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "error : %s\n", SDL_GetError());
+    if(SDL_Init(SDL_INIT_VIDEO) < 0) 
         goto err;
-    }
 
     x = 60;
     y = 60;
@@ -25,56 +20,52 @@ int main(int argc, char *argv[]) {
 
     /********************************************/
 
-    win1 = SDL_CreateWindow("Mandelbrot fractal", x, y, w, h, SDL_WINDOW_SHOWN);
-    if(!win1) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "error : %s\n", SDL_GetError());
+    SDL_Window *window1 = NULL;
+    window1 = SDL_CreateWindow("Mandelbrot fractal", x, y, w, h, SDL_WINDOW_SHOWN);
+    if(!window1)
         goto sdl_quit;
-    }
 
-    SDL_Renderer *ren1 = NULL;
-    ren1 = SDL_CreateRenderer(win1, -1, SDL_RENDERER_ACCELERATED);
-    if(!ren1) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "error : %s\n", SDL_GetError());
+    SDL_Renderer *renderer1 = NULL;
+    renderer1 = SDL_CreateRenderer(window1, -1, SDL_RENDERER_ACCELERATED);
+    if(!renderer1)
         goto destroy_window1;
-    }
 
-    win2 = SDL_CreateWindow("Julia fractal", x, y, w, h, SDL_WINDOW_SHOWN);
-    if(!win2) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "error : %s\n", SDL_GetError());
+    SDL_Window *window2 = NULL;
+    window2 = SDL_CreateWindow("Julia fractal", x, y, w, h, SDL_WINDOW_SHOWN);
+    if(!window2)
         goto sdl_quit;
-    }
 
-    SDL_Renderer *ren2 = NULL;
-    ren2 = SDL_CreateRenderer(win2, -1, SDL_RENDERER_ACCELERATED);
-    if(!ren2) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "error : %s\n", SDL_GetError());
+    SDL_Renderer *renderer2 = NULL;
+    renderer2 = SDL_CreateRenderer(window2, -1, SDL_RENDERER_ACCELERATED);
+    if(!renderer2)
         goto destroy_window2;
-    }
 
     /********************************************/
 
-    window ww1 = (window) {win1, ren1, NULL, w, h, -2, 1, -1.5, 1.5};
-    window ww2 = (window) {win2, ren2, NULL, w, h, -2, 2, -2, 2};
+    window win1 = (window) {window1, renderer1, NULL, w, h, -2, 1, -1.5, 1.5};
+    window win2 = (window) {window2, renderer2, NULL, w, h, -2, 2, -2, 2};
 
-    ww1.tex = SDL_CreateTexture(ww1.ren, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, ww1.w, ww1.h);
-    ww2.tex = SDL_CreateTexture(ww2.ren, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, ww2.w, ww2.h);
+    win1.tex = SDL_CreateTexture(win1.ren, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, win1.w, win1.h);
+    win2.tex = SDL_CreateTexture(win2.ren, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, win2.w, win2.h);
 
-    render_loop(&ww1, &ww2, 200, 768);
+    render_loop(&win1, &win2, 200, 768);
 
     /********************************************/
 
     ret = 0;
 
-    SDL_DestroyRenderer(ren1);
-    SDL_DestroyRenderer(ren2);
+    SDL_DestroyRenderer(renderer1);
+    SDL_DestroyRenderer(renderer2);
 
     destroy_window2:
-        SDL_DestroyWindow(win2);
+        SDL_DestroyWindow(window2);
     destroy_window1:
-        SDL_DestroyWindow(win1);
+        SDL_DestroyWindow(window1);
     sdl_quit:
         SDL_Quit();
     err:
+        if(ret)
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "error : %s\n", SDL_GetError());
         return ret;
 
     (void) argc;
